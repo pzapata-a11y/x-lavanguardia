@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>La Vanguardia · Feed</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- =====================================================================
+         CABECERA DEL PERIÓDICO — NO TOCAR / PENDIENTE DE PEGAR
+         Aquí va la cabecera fija que tú ya tienes o vas a crear aparte:
+         logo centrado, barra "Hoy interesa" y navegación de secciones con
+         fondo azul oscuro. Sustituye este <header> por el tuyo tal cual,
+         justo encima del <main id="feed-app">.
+         ===================================================================== -->
+    <header class="header-placeholder">
+      <p>[ Aquí va tu cabecera: logo + "Hoy interesa" + navegación de secciones ]</p>
+    </header>
+
+    <!-- =====================================================================
+         FEED TIPO TWITTER/X — a partir de aquí es lo que se ha construido
+         ===================================================================== -->
+    <main id="feed-app" class="feed-layout">
+      <section class="feed-main">
+        <nav class="feed-tabs" aria-label="Tipo de feed">
+          <button type="button" class="feed-tab active" data-tab="para-ti">Para ti</button>
+          <button type="button" class="feed-tab" data-tab="siguiendo">Siguiendo</button>
+        </nav>
+
+        <div id="feed" class="feed" aria-live="polite"></div>
+
+        <div id="feed-sentinel" class="feed-sentinel">
+          <span class="feed-loading">Cargando más noticias…</span>
+        </div>
+      </section>
+
+      <aside class="feed-sidebar">
+        <div class="sidebar-card">
+          <h2>Lo más visto</h2>
+          <ol id="trending-list" class="trending-list"></ol>
+        </div>
+        <p class="sidebar-note">Columna informativa de ejemplo, estilo "Qué está pasando" de Twitter/X.</p>
+      </aside>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
