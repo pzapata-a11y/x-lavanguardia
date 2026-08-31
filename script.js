@@ -1,40 +1,22 @@
 // =====================================================================
-// DATOS DE EJEMPLO
+// CONFIGURACIÓN DE SUPABASE
+// =====================================================================
+// La URL y la clave "publishable" (anon) son seguras de exponer en el
+// navegador: con las políticas RLS de rls_policies.sql solo permiten
+// LECTURA pública. La escritura la hace el scraper con la clave
+// service_role, que nunca debe aparecer aquí.
+
+const SUPABASE_URL = "https://jkiuwnjevhgiwqlxjutd.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_PP-ZHfn-Pbq5C8865yoKEQ_xMqoLLx7";
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// =====================================================================
+// DATOS DE EJEMPLO (vídeos, anuncios y comentarios siguen simulados)
 // =====================================================================
 
-const AUTHORS = {
-  "marta-puig": { name: "Marta Puig", color: "#0d2b4e", following: true },
-  "jordi-serra": { name: "Jordi Serra", color: "#1c7c3f", following: true },
-  "laura-gomez": { name: "Laura Gómez", color: "#7a4b1e", following: false },
-  "redaccion-sociedad": { name: "Redacción Sociedad", color: "#5b6672", following: false },
-  "pol-vidal": { name: "Pol Vidal", color: "#8e2e46", following: true },
-  "anna-ferrer": { name: "Anna Ferrer", color: "#5c3d8e", following: false },
-  "david-roca": { name: "David Roca", color: "#0b6e6e", following: false },
-  "nuria-camps": { name: "Núria Camps", color: "#8e5a0b", following: true },
-  "marc-illa": { name: "Marc Illa", color: "#1c7c3f", following: false },
-  "sara-puig": { name: "Sara Puig", color: "#0d2b4e", following: false },
-};
-
-const NEWS_DATA = [
-  { id: 1, author: "sara-puig", section: "Internacional", title: "La cumbre europea busca un acuerdo urgente para frenar la crisis energética", time: "9min", hasImage: true, likes: 214, comments: 18, reposts: 32, views: 12400 },
-  { id: 2, author: "jordi-serra", section: "Deportes", title: "El equipo se juega el pase a la final en un partido marcado por las bajas", time: "11min", hasImage: true, likes: 532, comments: 87, reposts: 120, views: 34500 },
-  { id: 3, author: "laura-gomez", section: "Economía", title: "La Bolsa cierra la semana con ganancias pese a la incertidumbre en los mercados", time: "22min", hasImage: true, likes: 98, comments: 12, reposts: 25, views: 8700 },
-  { id: 4, author: "redaccion-sociedad", section: "Sociedad", title: "Un estudio revela que el teletrabajo ha cambiado la forma de vivir en las ciudades medias", time: "34min", hasImage: false, likes: 156, comments: 24, reposts: 18, views: 9600 },
-  { id: 5, author: "pol-vidal", section: "Política", title: "El Gobierno anuncia un plan de choque para frenar la inflación en los próximos meses", time: "41min", hasImage: true, likes: 302, comments: 145, reposts: 76, views: 21000 },
-  { id: 6, author: "anna-ferrer", section: "Cultura", title: "La exposición que repasa cuatro décadas de fotografía urbana llega a la ciudad", time: "48min", hasImage: true, likes: 76, comments: 6, reposts: 9, views: 4300 },
-  { id: 7, author: "david-roca", section: "Tecnología", title: "La nueva generación de baterías promete duplicar la autonomía de los coches eléctricos", time: "55min", hasImage: true, likes: 189, comments: 33, reposts: 54, views: 15800 },
-  { id: 8, author: "nuria-camps", section: "Opinión", title: "Por qué deberíamos hablar más de salud mental en el trabajo y menos en las redes", time: "1h", hasImage: false, likes: 421, comments: 98, reposts: 61, views: 18200 },
-  { id: 9, author: "marc-illa", section: "Deportes", title: "El fichaje sorpresa que cambia por completo la planificación del próximo mercado", time: "1h", hasImage: true, likes: 267, comments: 41, reposts: 38, views: 13100 },
-  { id: 10, author: "marta-puig", section: "Internacional", title: "La ONU pide una investigación independiente tras el aumento de tensión en la frontera", time: "1h", hasImage: true, likes: 145, comments: 29, reposts: 44, views: 10200 },
-  { id: 11, author: "sara-puig", section: "Internacional", title: "El acuerdo comercial entre los dos bloques queda en suspenso tras el desacuerdo final", time: "2h", hasImage: false, likes: 88, comments: 15, reposts: 12, views: 6400 },
-  { id: 12, author: "laura-gomez", section: "Economía", title: "Las hipotecas se encarecen de nuevo tras la última decisión del banco central", time: "2h", hasImage: true, likes: 176, comments: 52, reposts: 29, views: 11900 },
-  { id: 13, author: "pol-vidal", section: "Política", title: "La oposición registra una moción para exigir explicaciones sobre el gasto público", time: "2h", hasImage: true, likes: 233, comments: 110, reposts: 47, views: 16700 },
-  { id: 14, author: "redaccion-sociedad", section: "Sociedad", title: "Las listas de espera sanitarias vuelven a crecer según el último informe autonómico", time: "3h", hasImage: true, likes: 312, comments: 76, reposts: 55, views: 19500 },
-  { id: 15, author: "david-roca", section: "Tecnología", title: "Una investigación alerta del uso creciente de inteligencia artificial en fraudes online", time: "3h", hasImage: false, likes: 199, comments: 45, reposts: 63, views: 14300 },
-  { id: 16, author: "nuria-camps", section: "Opinión", title: "La generación que creció con el móvil en la mano ya educa a sus propios hijos", time: "3h", hasImage: true, likes: 356, comments: 84, reposts: 71, views: 20100 },
-  { id: 17, author: "anna-ferrer", section: "Cultura", title: "El festival de cine independiente anuncia una edición récord de participación", time: "4h", hasImage: true, likes: 64, comments: 8, reposts: 6, views: 3900 },
-  { id: 18, author: "marc-illa", section: "Deportes", title: "La lesión de última hora obliga a cambiar los planes para el partido del fin de semana", time: "4h", hasImage: true, likes: 288, comments: 39, reposts: 41, views: 13600 },
-];
+const AUTHORS = {}; // se rellena dinámicamente al cargar Supabase
+let NEWS_DATA = []; // se rellena dinámicamente al cargar Supabase
 
 const VIDEO_DATA = [
   { id: "v1", author: "redaccion-sociedad", section: "Vídeo", title: "Así ha quedado la plaza tras las obras de remodelación del centro histórico", time: "20min", duration: "1:48", likes: 143, comments: 21, reposts: 19, views: 22300 },
@@ -84,6 +66,42 @@ function shuffled(list) {
   return copy;
 }
 
+// Color determinista a partir del slug del autor, para cuando no hay foto.
+function colorFromSlug(slug) {
+  const palette = ["#0d2b4e", "#1c7c3f", "#7a4b1e", "#5b6672", "#8e2e46", "#5c3d8e", "#0b6e6e", "#8e5a0b"];
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) hash = slug.charCodeAt(i) + ((hash << 5) - hash);
+  return palette[Math.abs(hash) % palette.length];
+}
+
+// Convierte una fecha ISO (published_at) en "9min" / "3h" / "2d".
+function timeAgo(isoDate) {
+  if (!isoDate) return "";
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "ahora";
+  if (minutes < 60) return `${minutes}min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+// Genera likes/comentarios/reposts/vistas deterministas (mismos en cada
+// recarga) a partir del id del artículo, hasta que haya métricas reales.
+function seededEngagement(id) {
+  let seed = 0;
+  const str = String(id);
+  for (let i = 0; i < str.length; i++) seed = str.charCodeAt(i) + ((seed << 5) - seed);
+  const rnd = (n) => Math.abs((seed = (seed * 9301 + 49297) % 233280)) % n;
+  return {
+    likes: 20 + rnd(400),
+    comments: rnd(80),
+    reposts: rnd(60),
+    views: 500 + rnd(20000),
+  };
+}
+
 const commentIcon = '<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M4 5h16v11H8l-4 4V5z"/></svg>';
 const repostIcon = '<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M6 4v9a3 3 0 0 0 3 3h9M18 20v-9a3 3 0 0 0-3-3H6M9 20l-3-3 3-3M15 4l3 3-3 3"/></svg>';
 const likeIcon = '<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M12 21s-7-4.6-9-7.9C1.4 10.6 3 6 7 6c2.4 0 3.2 1.6 5 3.2C13.8 7.6 14.6 6 17 6c4 0 5.6 4.6 4 7.1C19 16.4 12 21 12 21z"/></svg>';
@@ -98,12 +116,20 @@ const playIcon = "&#9658;";
 function authorAvatarHTML(authorSlug, size) {
   const author = AUTHORS[authorSlug];
   const sizeClass = size === "small" ? " small" : "";
+  if (author.photo) {
+    return `<img class="avatar${sizeClass}" src="${author.photo}" alt="${author.name}" />`;
+  }
   return `<span class="avatar${sizeClass}" style="background:${author.color}">${initials(author.name)}</span>`;
 }
 
 function newsCardHTML(item) {
   const author = AUTHORS[item.author];
   const authorSlug = item.author;
+  const cover = item.hasImage
+    ? item.image
+      ? `<div class="cover-image" style="background-image:url('${item.image}'); background-size:cover; background-position:center;"></div>`
+      : `<div class="cover-image" style="background:linear-gradient(135deg, ${author.color}, rgba(0,0,0,0.35))">${item.section}</div>`
+    : "";
   return `
     <article class="feed-card" data-type="news" data-id="${item.id}" data-title="${item.title}">
       <div class="feed-card-header">
@@ -119,7 +145,7 @@ function newsCardHTML(item) {
       </div>
       <div class="feed-card-body">
         <h2 class="headline">${item.title}</h2>
-        ${item.hasImage ? `<div class="cover-image" style="background:linear-gradient(135deg, ${author.color}, rgba(0,0,0,0.35))">${item.section}</div>` : ""}
+        ${cover}
       </div>
       ${actionsBarHTML(item)}
       <div class="comments-panel hidden" data-comments-for="${item.id}"></div>
@@ -211,7 +237,7 @@ const feedState = {
 
 function getSourceForTab(tab) {
   if (tab === "siguiendo") {
-    return NEWS_DATA.filter((item) => AUTHORS[item.author].following);
+    return NEWS_DATA.filter((item) => AUTHORS[item.author]?.following);
   }
   return NEWS_DATA;
 }
@@ -263,7 +289,7 @@ function renderFeed(tab, { append = false } = {}) {
 
   if (feedState.batchesLoaded >= feedState.maxBatches) {
     sentinel.classList.add("is-hidden");
-    feedEl.insertAdjacentHTML("beforeend", '<p class="feed-end">Has llegado al final de esta muestra de ejemplo.</p>');
+    feedEl.insertAdjacentHTML("beforeend", '<p class="feed-end">Has llegado al final de esta muestra.</p>');
   }
 }
 
@@ -441,8 +467,58 @@ function renderTrending() {
 }
 
 // =====================================================================
+// CARGA DE DATOS REALES DESDE SUPABASE
+// =====================================================================
+
+async function loadArticlesFromSupabase() {
+  const { data, error } = await supabaseClient
+    .from("articles")
+    .select("id, title, section, image_url, published_at, author_slug, authors(name, photo_url)")
+    .order("published_at", { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error("Error cargando artículos de Supabase:", error);
+    document.getElementById("feed").innerHTML =
+      '<p class="feed-empty">No se han podido cargar las noticias. Revisa la consola (F12).</p>';
+    return;
+  }
+
+  data.forEach((row) => {
+    const slug = row.author_slug || "sin-firma";
+    if (!AUTHORS[slug]) {
+      const name = row.authors?.name || "Sin firma";
+      AUTHORS[slug] = {
+        name,
+        color: colorFromSlug(slug),
+        photo: row.authors?.photo_url || null,
+        following: false,
+      };
+    }
+  });
+
+  NEWS_DATA = data.map((row) => {
+    const eng = seededEngagement(row.id);
+    return {
+      id: row.id,
+      author: row.author_slug || "sin-firma",
+      section: row.section || "Al Minuto",
+      title: row.title,
+      time: timeAgo(row.published_at),
+      hasImage: !!row.image_url,
+      image: row.image_url,
+      ...eng,
+    };
+  });
+}
+
+// =====================================================================
 // INICIO
 // =====================================================================
 
-renderFeed(feedState.currentTab);
-renderTrending();
+(async function init() {
+  document.getElementById("feed").innerHTML = '<p class="feed-empty">Cargando noticias…</p>';
+  await loadArticlesFromSupabase();
+  renderFeed(feedState.currentTab);
+  renderTrending();
+})();
