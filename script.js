@@ -113,8 +113,21 @@ const playIcon = "&#9658;";
 // RENDERIZADO DE TARJETAS
 // =====================================================================
 
+// Devuelve el autor si existe, o un autor de reserva si no (por ejemplo,
+// los autores de los vídeos de ejemplo, que no vienen de Supabase).
+function getAuthor(slug) {
+  return (
+    AUTHORS[slug] || {
+      name: "La Vanguardia",
+      color: colorFromSlug(slug || "la-vanguardia"),
+      photo: null,
+      following: false,
+    }
+  );
+}
+
 function authorAvatarHTML(authorSlug, size) {
-  const author = AUTHORS[authorSlug];
+  const author = getAuthor(authorSlug);
   const sizeClass = size === "small" ? " small" : "";
   if (author.photo) {
     return `<img class="avatar${sizeClass}" src="${author.photo}" alt="${author.name}" />`;
@@ -123,7 +136,7 @@ function authorAvatarHTML(authorSlug, size) {
 }
 
 function newsCardHTML(item) {
-  const author = AUTHORS[item.author];
+  const author = getAuthor(item.author);
   const authorSlug = item.author;
   const cover = item.hasImage
     ? item.image
@@ -154,7 +167,7 @@ function newsCardHTML(item) {
 }
 
 function videoCardHTML(item) {
-  const author = AUTHORS[item.author];
+  const author = getAuthor(item.author);
   const authorSlug = item.author;
   return `
     <article class="feed-card feed-card-video" data-type="video" data-id="${item.id}" data-title="${item.title}">
@@ -237,7 +250,7 @@ const feedState = {
 
 function getSourceForTab(tab) {
   if (tab === "siguiendo") {
-    return NEWS_DATA.filter((item) => AUTHORS[item.author]?.following);
+    return NEWS_DATA.filter((item) => getAuthor(item.author).following);
   }
   return NEWS_DATA;
 }
@@ -480,8 +493,8 @@ async function loadArticlesFromSupabase() {
   if (error) {
     console.error("Error cargando artículos de Supabase:", error);
     document.getElementById("feed").innerHTML =
-      '<p class="feed-empty">No se han podido cargar las noticias. Revisa la consola (F12).</p>';
-    return;
+      `<p class="feed-empty">No se han podido cargar las noticias.<br>Error: ${error.message || error.code || "desconocido"}</p>`;
+    return false;
   }
 
   data.forEach((row) => {
@@ -510,6 +523,14 @@ async function loadArticlesFromSupabase() {
       ...eng,
     };
   });
+
+  if (NEWS_DATA.length === 0) {
+    document.getElementById("feed").innerHTML =
+      '<p class="feed-empty">La consulta a Supabase funcionó pero no devolvió ninguna noticia.</p>';
+    return false;
+  }
+
+  return true;
 }
 
 // =====================================================================
@@ -518,7 +539,8 @@ async function loadArticlesFromSupabase() {
 
 (async function init() {
   document.getElementById("feed").innerHTML = '<p class="feed-empty">Cargando noticias…</p>';
-  await loadArticlesFromSupabase();
+  const ok = await loadArticlesFromSupabase();
+  if (!ok) return; // el mensaje de error ya está puesto, no lo tapamos
   renderFeed(feedState.currentTab);
   renderTrending();
 })();
