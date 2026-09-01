@@ -1,10 +1,6 @@
 // =====================================================================
 // CONFIGURACIÓN DE SUPABASE
 // =====================================================================
-// La URL y la clave "publishable" (anon) son seguras de exponer en el
-// navegador: con las políticas RLS de rls_policies.sql solo permiten
-// LECTURA pública. La escritura la hace el scraper con la clave
-// service_role, que nunca debe aparecer aquí.
 
 const SUPABASE_URL = "https://jkiuwnjevhgiwqlxjutd.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_PP-ZHfn-Pbq5C8865yoKEQ_xMqoLLx7";
@@ -12,29 +8,39 @@ const SUPABASE_ANON_KEY = "sb_publishable_PP-ZHfn-Pbq5C8865yoKEQ_xMqoLLx7";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =====================================================================
-// DATOS DE EJEMPLO (vídeos, anuncios y comentarios siguen simulados)
+// IDENTIDAD ANÓNIMA DEL VISITANTE (sin login real)
+// =====================================================================
+// Vive solo en este navegador. Permite que los likes/guardados/follows
+// se mantengan entre visitas sin necesitar cuenta ni contraseña.
+
+function getVisitorId() {
+  let id = localStorage.getItem("xlv_visitor_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("xlv_visitor_id", id);
+  }
+  return id;
+}
+
+const VISITOR_ID = getVisitorId();
+
+// =====================================================================
+// DATOS DE EJEMPLO (vídeos y anuncios siguen simulados)
 // =====================================================================
 
 const AUTHORS = {}; // se rellena dinámicamente al cargar Supabase
 let NEWS_DATA = []; // se rellena dinámicamente al cargar Supabase
 
 const VIDEO_DATA = [
-  { id: "v1", author: "redaccion-sociedad", section: "Vídeo", title: "Así ha quedado la plaza tras las obras de remodelación del centro histórico", time: "20min", duration: "1:48", likes: 143, comments: 21, reposts: 19, views: 22300 },
-  { id: "v2", author: "jordi-serra", section: "Vídeo", title: "Las mejores jugadas de la jornada en menos de dos minutos", time: "1h", duration: "1:52", likes: 401, comments: 58, reposts: 87, views: 45200 },
-  { id: "v3", author: "david-roca", section: "Vídeo", title: "Probamos el nuevo dispositivo que promete cambiar la forma de trabajar en remoto", time: "2h", duration: "3:10", likes: 210, comments: 34, reposts: 40, views: 17600 },
-  { id: "v4", author: "marta-puig", section: "Vídeo", title: "Imágenes desde el lugar donde se ha producido el encuentro internacional", time: "3h", duration: "2:24", likes: 178, comments: 26, reposts: 33, views: 15900 },
+  { id: "v1", author: null, section: "Vídeo", title: "Así ha quedado la plaza tras las obras de remodelación del centro histórico", time: "20min", duration: "1:48", views: 0 },
+  { id: "v2", author: null, section: "Vídeo", title: "Las mejores jugadas de la jornada en menos de dos minutos", time: "1h", duration: "1:52", views: 0 },
+  { id: "v3", author: null, section: "Vídeo", title: "Probamos el nuevo dispositivo que promete cambiar la forma de trabajar en remoto", time: "2h", duration: "3:10", views: 0 },
+  { id: "v4", author: null, section: "Vídeo", title: "Imágenes desde el lugar donde se ha producido el encuentro internacional", time: "3h", duration: "2:24", views: 0 },
 ];
 
 const AD_DATA = [
   { id: "a1", title: "Suscríbete a La Vanguardia", body: "Accede a todo el contenido sin límites desde 1€ el primer mes." },
   { id: "a2", title: "La Vanguardia Shopping", body: "Descubre las mejores ofertas seleccionadas para nuestros lectores." },
-];
-
-const COMMENTS_POOL = [
-  { author: "laia-montes", name: "Laia Montes", color: "#0d2b4e", text: "Muy buen resumen, gracias por la información." },
-  { author: "ricard-soler", name: "Ricard Soler", color: "#7a4b1e", text: "Habrá que ver cómo evoluciona en los próximos días." },
-  { author: "elena-vidal", name: "Elena Vidal", color: "#8e2e46", text: "No estoy del todo de acuerdo, faltan datos por contrastar." },
-  { author: "toni-marques", name: "Toni Marqués", color: "#1c7c3f", text: "Totalmente de acuerdo, ya era hora de que se hablara de esto." },
 ];
 
 // =====================================================================
@@ -74,9 +80,10 @@ function colorFromSlug(slug) {
   return palette[Math.abs(hash) % palette.length];
 }
 
-// Convierte una fecha ISO (published_at) en "9min" / "3h" / "2d".
+// Convierte una fecha ISO en "9min" / "3h" / "2d" / "12d". Siempre
+// devuelve algo (usa first_seen_at como reserva si falta published_at).
 function timeAgo(isoDate) {
-  if (!isoDate) return "";
+  if (!isoDate) return "hace un tiempo";
   const diffMs = Date.now() - new Date(isoDate).getTime();
   const minutes = Math.floor(diffMs / 60000);
   if (minutes < 1) return "ahora";
@@ -87,23 +94,21 @@ function timeAgo(isoDate) {
   return `${days}d`;
 }
 
-// Genera likes/comentarios/reposts/vistas deterministas (mismos en cada
-// recarga) a partir del id del artículo, hasta que haya métricas reales.
-function seededEngagement(id) {
-  let seed = 0;
-  const str = String(id);
-  for (let i = 0; i < str.length; i++) seed = str.charCodeAt(i) + ((seed << 5) - seed);
-  const rnd = (n) => Math.abs((seed = (seed * 9301 + 49297) % 233280)) % n;
-  return {
-    likes: 20 + rnd(400),
-    comments: rnd(80),
-    reposts: rnd(60),
-    views: 500 + rnd(20000),
-  };
+// Devuelve el autor si existe, o un autor de reserva si no (por ejemplo,
+// los vídeos de ejemplo, que no vienen de Supabase).
+function getAuthor(slug) {
+  return (
+    AUTHORS[slug] || {
+      name: "La Vanguardia",
+      color: colorFromSlug(slug || "la-vanguardia"),
+      photo: null,
+      pageUrl: null,
+      following: false,
+    }
+  );
 }
 
 const commentIcon = '<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M4 5h16v11H8l-4 4V5z"/></svg>';
-const repostIcon = '<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M6 4v9a3 3 0 0 0 3 3h9M18 20v-9a3 3 0 0 0-3-3H6M9 20l-3-3 3-3M15 4l3 3-3 3"/></svg>';
 const likeIcon = '<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M12 21s-7-4.6-9-7.9C1.4 10.6 3 6 7 6c2.4 0 3.2 1.6 5 3.2C13.8 7.6 14.6 6 17 6c4 0 5.6 4.6 4 7.1C19 16.4 12 21 12 21z"/></svg>';
 const viewsIcon = '<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
 const saveIcon = '<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M6 4h12v16l-6-4-6 4V4z"/></svg>';
@@ -113,19 +118,6 @@ const playIcon = "&#9658;";
 // RENDERIZADO DE TARJETAS
 // =====================================================================
 
-// Devuelve el autor si existe, o un autor de reserva si no (por ejemplo,
-// los autores de los vídeos de ejemplo, que no vienen de Supabase).
-function getAuthor(slug) {
-  return (
-    AUTHORS[slug] || {
-      name: "La Vanguardia",
-      color: colorFromSlug(slug || "la-vanguardia"),
-      photo: null,
-      following: false,
-    }
-  );
-}
-
 function authorAvatarHTML(authorSlug, size) {
   const author = getAuthor(authorSlug);
   const sizeClass = size === "small" ? " small" : "";
@@ -133,6 +125,25 @@ function authorAvatarHTML(authorSlug, size) {
     return `<img class="avatar${sizeClass}" src="${author.photo}" alt="${author.name}" />`;
   }
   return `<span class="avatar${sizeClass}" style="background:${author.color}">${initials(author.name)}</span>`;
+}
+
+// El nombre/avatar del autor SIEMPRE enlaza a la página real de La
+// Vanguardia (no hay páginas de autor dentro de esta demo).
+function authorLinkAttrs(author) {
+  return author.pageUrl
+    ? `href="${author.pageUrl}" target="_blank" rel="noopener"`
+    : `href="javascript:void(0)" tabindex="-1" aria-disabled="true"`;
+}
+
+function followButtonHTML(authorSlug) {
+  const author = getAuthor(authorSlug);
+  if (!AUTHORS[authorSlug]) return ""; // no mostramos "seguir" sobre autores de reserva
+  const active = author.following;
+  return `
+    <button type="button" class="follow-btn${active ? " is-active" : ""}" data-action="follow" data-author="${authorSlug}">
+      ${active ? "Siguiendo" : "Seguir"}
+    </button>
+  `;
 }
 
 function newsCardHTML(item) {
@@ -144,16 +155,17 @@ function newsCardHTML(item) {
       : `<div class="cover-image" style="background:linear-gradient(135deg, ${author.color}, rgba(0,0,0,0.35))">${item.section}</div>`
     : "";
   return `
-    <article class="feed-card" data-type="news" data-id="${item.id}" data-title="${item.title}">
+    <article class="feed-card" data-type="news" data-id="${item.id}" data-url="${item.url || ""}">
       <div class="feed-card-header">
-        <a class="author-link" href="/autor/${authorSlug}" title="Ver perfil de ${author.name}">
+        <a class="author-link" ${authorLinkAttrs(author)} title="Ver perfil de ${author.name} en La Vanguardia">
           ${authorAvatarHTML(authorSlug)}
         </a>
         <div class="author-meta">
-          <a class="author-name" href="/autor/${authorSlug}">${author.name}</a>
+          <a class="author-name" ${authorLinkAttrs(author)}>${author.name}</a>
           <span class="dot">·</span>
           <span class="time">${item.time}</span>
         </div>
+        ${followButtonHTML(authorSlug)}
         <span class="section-tag">${item.section}</span>
       </div>
       <div class="feed-card-body">
@@ -161,22 +173,18 @@ function newsCardHTML(item) {
         ${cover}
       </div>
       ${actionsBarHTML(item)}
-      <div class="comments-panel hidden" data-comments-for="${item.id}"></div>
     </article>
   `;
 }
 
 function videoCardHTML(item) {
   const author = getAuthor(item.author);
-  const authorSlug = item.author;
   return `
-    <article class="feed-card feed-card-video" data-type="video" data-id="${item.id}" data-title="${item.title}">
+    <article class="feed-card feed-card-video" data-type="video" data-id="${item.id}" data-url="">
       <div class="feed-card-header">
-        <a class="author-link" href="/autor/${authorSlug}" title="Ver perfil de ${author.name}">
-          ${authorAvatarHTML(authorSlug)}
-        </a>
+        <span class="avatar" style="background:${author.color}">${initials(author.name)}</span>
         <div class="author-meta">
-          <a class="author-name" href="/autor/${authorSlug}">${author.name}</a>
+          <span class="author-name">${author.name}</span>
           <span class="dot">·</span>
           <span class="time">${item.time}</span>
         </div>
@@ -190,7 +198,6 @@ function videoCardHTML(item) {
         </div>
       </div>
       ${actionsBarHTML(item)}
-      <div class="comments-panel hidden" data-comments-for="${item.id}"></div>
     </article>
   `;
 }
@@ -211,21 +218,19 @@ function actionsBarHTML(item) {
   return `
     <div class="feed-card-actions">
       <button type="button" class="action-btn comment-btn" data-action="comment">
-        ${commentIcon}<span class="comment-count">${formatCount(item.comments)}</span>
+        ${commentIcon}<span class="comment-count">Comentarios</span>
       </button>
-      <button type="button" class="action-btn repost-btn" data-action="repost">
-        ${repostIcon}<span class="repost-count">${formatCount(item.reposts)}</span>
-      </button>
-      <button type="button" class="action-btn like-btn" data-action="like">
-        ${likeIcon}<span class="like-count">${formatCount(item.likes)}</span>
+      <button type="button" class="action-btn like-btn${item.liked ? " is-active" : ""}" data-action="like">
+        ${likeIcon}<span class="like-count">${formatCount(item.likes || 0)}</span>
       </button>
       <button type="button" class="action-btn views-btn" data-action="views">
-        ${viewsIcon}<span class="views-count">${formatCount(item.views)}</span>
+        ${viewsIcon}<span class="views-count">${formatCount(item.views || 0)}</span>
       </button>
-      <button type="button" class="action-btn save-btn" data-action="save" aria-label="Guardar">
+      <button type="button" class="action-btn save-btn${item.saved ? " is-active" : ""}" data-action="save" aria-label="Guardar">
         ${saveIcon}
       </button>
     </div>
+    <div class="comments-notice hidden">Los comentarios estarán disponibles próximamente para personas suscritas.</div>
   `;
 }
 
@@ -252,20 +257,23 @@ function getSourceForTab(tab) {
   if (tab === "siguiendo") {
     return NEWS_DATA.filter((item) => getAuthor(item.author).following);
   }
+  if (tab === "guardados") {
+    return NEWS_DATA.filter((item) => item.saved);
+  }
   return NEWS_DATA;
 }
 
-function buildBatch(newsItems) {
+function buildBatch(newsItems, mixExtras) {
   const out = [];
   newsItems.forEach((newsItem) => {
     out.push({ type: "news", data: newsItem });
     feedState.newsCounter++;
 
-    if (feedState.newsCounter % 3 === 0) {
+    if (mixExtras && feedState.newsCounter % 3 === 0) {
       out.push({ type: "video", data: VIDEO_DATA[feedState.videoIndex % VIDEO_DATA.length] });
       feedState.videoIndex++;
     }
-    if (feedState.newsCounter % 5 === 0) {
+    if (mixExtras && feedState.newsCounter % 5 === 0) {
       out.push({ type: "ad", data: AD_DATA[feedState.adIndex % AD_DATA.length] });
       feedState.adIndex++;
     }
@@ -284,6 +292,7 @@ function renderFeed(tab, { append = false } = {}) {
   const feedEl = document.getElementById("feed");
   const sentinel = document.getElementById("feed-sentinel");
   const source = getSourceForTab(tab);
+  const mixExtras = tab === "para-ti"; // vídeos/anuncios de ejemplo solo en "Para ti"
 
   if (!append) {
     feedEl.innerHTML = "";
@@ -291,22 +300,29 @@ function renderFeed(tab, { append = false } = {}) {
   }
 
   if (!source.length) {
-    feedEl.innerHTML = '<p class="feed-empty">Todavía no sigues autores. Prueba la pestaña "Para ti".</p>';
+    const emptyMessage =
+      tab === "siguiendo"
+        ? 'Todavía no sigues a ningún autor. Pulsa "Seguir" en cualquier noticia.'
+        : tab === "guardados"
+        ? "Todavía no has guardado ninguna noticia."
+        : "No hay noticias disponibles.";
+    feedEl.innerHTML = `<p class="feed-empty">${emptyMessage}</p>`;
     sentinel.classList.add("is-hidden");
     return;
   }
 
-  const batch = buildBatch(shuffled(source));
+  const batch = buildBatch(tab === "para-ti" ? shuffled(source) : source, mixExtras);
   feedEl.insertAdjacentHTML("beforeend", batch.map(cardHTML).join(""));
   feedState.batchesLoaded++;
 
-  if (feedState.batchesLoaded >= feedState.maxBatches) {
+  if (feedState.batchesLoaded >= feedState.maxBatches || !mixExtras) {
     sentinel.classList.add("is-hidden");
     feedEl.insertAdjacentHTML("beforeend", '<p class="feed-end">Has llegado al final de esta muestra.</p>');
   }
 }
 
 function loadMore() {
+  if (feedState.currentTab !== "para-ti") return;
   if (feedState.batchesLoaded >= feedState.maxBatches) return;
   renderFeed(feedState.currentTab, { append: true });
 }
@@ -341,43 +357,11 @@ const observer = new IntersectionObserver(
 observer.observe(sentinelEl);
 
 // =====================================================================
-// COMENTARIOS SIMULADOS
-// =====================================================================
-
-function commentRowHTML(entry) {
-  return `
-    <div class="comment">
-      <span class="avatar small" style="background:${entry.color}">${initials(entry.name)}</span>
-      <div class="comment-body">
-        <a class="comment-author" href="/autor/${entry.author}">${entry.name}</a>
-        <p class="comment-text">${entry.text}</p>
-      </div>
-    </div>
-  `;
-}
-
-function renderCommentsPanel(panel, articleId) {
-  const seedIndex = Number(String(articleId).replace(/\D/g, "")) || 0;
-  const shown = [COMMENTS_POOL[seedIndex % COMMENTS_POOL.length], COMMENTS_POOL[(seedIndex + 1) % COMMENTS_POOL.length]];
-
-  panel.innerHTML = `
-    <div class="comments-list">${shown.map(commentRowHTML).join("")}</div>
-    <form class="comment-form">
-      <input type="text" class="comment-input" placeholder="Escribe un comentario..." />
-      <button type="submit" class="comment-submit">Publicar</button>
-    </form>
-  `;
-}
-
-// =====================================================================
 // DELEGACIÓN DE EVENTOS SOBRE EL FEED
 // =====================================================================
 
 document.getElementById("feed").addEventListener("click", (event) => {
-  const commentForm = event.target.closest(".comment-form");
-  if (commentForm) return; // el submit se gestiona aparte
-
-  const actionBtn = event.target.closest(".action-btn");
+  const actionBtn = event.target.closest(".action-btn, .follow-btn");
   const card = event.target.closest(".feed-card");
   if (!card) return;
 
@@ -387,76 +371,100 @@ document.getElementById("feed").addEventListener("click", (event) => {
   }
 
   if (event.target.closest(".author-link")) return; // navegación normal al autor
-  if (event.target.closest(".comments-panel")) return;
+  if (card.dataset.type === "ad") return;
 
-  if (card.dataset.type === "ad") return; // la publicidad no simula navegación
-
-  const title = card.dataset.title || "vídeo";
   if (card.dataset.type === "video") {
-    alert(`Reproduciendo vídeo: ${title}`);
-  } else {
-    alert(`Abriendo noticia completa:\n\n${title}`);
-  }
-});
-
-document.getElementById("feed").addEventListener("submit", (event) => {
-  const form = event.target.closest(".comment-form");
-  if (!form) return;
-  event.preventDefault();
-
-  const input = form.querySelector(".comment-input");
-  const text = input.value.trim();
-  if (!text) return;
-
-  const card = form.closest(".feed-card");
-  const list = form.previousElementSibling;
-  list.insertAdjacentHTML(
-    "afterbegin",
-    commentRowHTML({ author: "tu-usuario", name: "Tú", color: "#0d2b4e", text })
-  );
-  input.value = "";
-
-  const countEl = card.querySelector(".comment-count");
-  const next = parseCount(countEl.textContent) + 1;
-  countEl.dataset.raw = String(next);
-  countEl.textContent = formatCount(next);
-});
-
-function handleAction(button, card) {
-  const action = button.dataset.action;
-
-  if (action === "comment") {
-    const panel = card.querySelector(".comments-panel");
-    const wasHidden = panel.classList.contains("hidden");
-    if (wasHidden && !panel.dataset.rendered) {
-      renderCommentsPanel(panel, card.dataset.id);
-      panel.dataset.rendered = "true";
-    }
-    panel.classList.toggle("hidden");
+    alert("Los vídeos son contenido de ejemplo en esta demo.");
     return;
   }
 
-  if (action === "views") return; // solo informativo
-
-  if (action === "like" || action === "repost" || action === "save") {
-    const isCountable = action !== "save";
-    button.classList.toggle("is-active");
-    if (isCountable) {
-      const countEl = button.querySelector(`.${action}-count`);
-      const active = button.classList.contains("is-active");
-      const raw = countEl.dataset.raw ? Number(countEl.dataset.raw) : parseCount(countEl.textContent);
-      const next = active ? raw + 1 : raw - 1;
-      countEl.dataset.raw = String(next);
-      countEl.textContent = formatCount(next);
-    }
+  const url = card.dataset.url;
+  const articleId = card.dataset.id;
+  if (url) {
+    registerView(articleId);
+    window.open(url, "_blank", "noopener");
   }
+});
+
+async function registerView(articleId) {
+  const numericId = Number(articleId);
+  if (!numericId) return;
+  const item = NEWS_DATA.find((n) => String(n.id) === String(articleId));
+  if (item) {
+    item.views = (item.views || 0) + 1;
+    const card = document.querySelector(`.feed-card[data-id="${articleId}"]`);
+    const countEl = card && card.querySelector(".views-count");
+    if (countEl) countEl.textContent = formatCount(item.views);
+  }
+  const { error } = await supabaseClient.rpc("increment_views", { p_article_id: numericId });
+  if (error) console.warn("No se pudo registrar la vista:", error.message);
 }
 
-function parseCount(text) {
-  if (text.includes("K")) {
-    return Math.round(parseFloat(text.replace(",", ".")) * 1000);
+async function handleAction(button, card) {
+  const action = button.dataset.action;
+  const articleId = card.dataset.id;
+
+  if (action === "comment") {
+    const notice = card.querySelector(".comments-notice");
+    notice.classList.toggle("hidden");
+    return;
   }
-  return Number(text);
+
+  if (action === "views") return; // solo informativo, no hace nada al clicar
+
+  if (action === "follow") {
+    const authorSlug = button.dataset.author;
+    const author = getAuthor(authorSlug);
+    const nextState = !author.following;
+    author.following = nextState;
+    button.classList.toggle("is-active", nextState);
+    button.textContent = nextState ? "Siguiendo" : "Seguir";
+
+    if (nextState) {
+      const { error } = await supabaseClient.from("follows").insert({ author_slug: authorSlug, visitor_id: VISITOR_ID });
+      if (error) console.warn("No se pudo guardar el follow:", error.message);
+    } else {
+      const { error } = await supabaseClient
+        .from("follows")
+        .delete()
+        .eq("author_slug", authorSlug)
+        .eq("visitor_id", VISITOR_ID);
+      if (error) console.warn("No se pudo quitar el follow:", error.message);
+    }
+    return;
+  }
+
+  if (action === "like" || action === "save") {
+    const numericId = Number(articleId);
+    const item = NEWS_DATA.find((n) => String(n.id) === String(articleId));
+    const isNowActive = !button.classList.contains("is-active");
+    button.classList.toggle("is-active", isNowActive);
+
+    const table = action === "like" ? "likes" : "saves";
+    const column = "article_id";
+
+    if (action === "like" && item) {
+      item.liked = isNowActive;
+      item.likes = (item.likes || 0) + (isNowActive ? 1 : -1);
+      const countEl = button.querySelector(".like-count");
+      countEl.textContent = formatCount(item.likes);
+    }
+    if (action === "save" && item) {
+      item.saved = isNowActive;
+    }
+
+    if (isNowActive) {
+      const { error } = await supabaseClient.from(table).insert({ [column]: numericId, visitor_id: VISITOR_ID });
+      if (error) console.warn(`No se pudo guardar ${action}:`, error.message);
+    } else {
+      const { error } = await supabaseClient
+        .from(table)
+        .delete()
+        .eq(column, numericId)
+        .eq("visitor_id", VISITOR_ID);
+      if (error) console.warn(`No se pudo quitar ${action}:`, error.message);
+    }
+  }
 }
 
 // =====================================================================
@@ -466,7 +474,7 @@ function parseCount(text) {
 function renderTrending() {
   const list = document.getElementById("trending-list");
   if (!list) return;
-  const top = NEWS_DATA.slice().sort((a, b) => b.views - a.views).slice(0, 5);
+  const top = NEWS_DATA.slice().sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5);
   list.innerHTML = top
     .map(
       (item) => `
@@ -483,12 +491,25 @@ function renderTrending() {
 // CARGA DE DATOS REALES DESDE SUPABASE
 // =====================================================================
 
+async function loadVisitorState() {
+  const [likesRes, savesRes, followsRes] = await Promise.all([
+    supabaseClient.from("likes").select("article_id").eq("visitor_id", VISITOR_ID),
+    supabaseClient.from("saves").select("article_id").eq("visitor_id", VISITOR_ID),
+    supabaseClient.from("follows").select("author_slug").eq("visitor_id", VISITOR_ID),
+  ]);
+  return {
+    likedIds: new Set((likesRes.data || []).map((r) => r.article_id)),
+    savedIds: new Set((savesRes.data || []).map((r) => r.article_id)),
+    followedSlugs: new Set((followsRes.data || []).map((r) => r.author_slug)),
+  };
+}
+
 async function loadArticlesFromSupabase() {
   const { data, error } = await supabaseClient
-    .from("articles")
-    .select("id, title, section, image_url, published_at, author_slug, authors(name, photo_url)")
-    .order("published_at", { ascending: false })
-    .limit(100);
+    .from("feed_articles")
+    .select("*")
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .limit(150);
 
   if (error) {
     console.error("Error cargando artículos de Supabase:", error);
@@ -497,38 +518,41 @@ async function loadArticlesFromSupabase() {
     return false;
   }
 
-  data.forEach((row) => {
-    const slug = row.author_slug || "sin-firma";
-    if (!AUTHORS[slug]) {
-      const name = row.authors?.name || "Sin firma";
-      AUTHORS[slug] = {
-        name,
-        color: colorFromSlug(slug),
-        photo: row.authors?.photo_url || null,
-        following: false,
-      };
-    }
-  });
-
-  NEWS_DATA = data.map((row) => {
-    const eng = seededEngagement(row.id);
-    return {
-      id: row.id,
-      author: row.author_slug || "sin-firma",
-      section: row.section || "Al Minuto",
-      title: row.title,
-      time: timeAgo(row.published_at),
-      hasImage: !!row.image_url,
-      image: row.image_url,
-      ...eng,
-    };
-  });
-
-  if (NEWS_DATA.length === 0) {
+  if (!data || data.length === 0) {
     document.getElementById("feed").innerHTML =
       '<p class="feed-empty">La consulta a Supabase funcionó pero no devolvió ninguna noticia.</p>';
     return false;
   }
+
+  const { likedIds, savedIds, followedSlugs } = await loadVisitorState();
+
+  data.forEach((row) => {
+    const slug = row.author_slug || "sin-firma";
+    if (!AUTHORS[slug]) {
+      AUTHORS[slug] = {
+        name: row.author_name || "Sin firma",
+        color: colorFromSlug(slug),
+        photo: row.author_photo || null,
+        pageUrl: row.author_page_url || null,
+        following: followedSlugs.has(slug),
+      };
+    }
+  });
+
+  NEWS_DATA = data.map((row) => ({
+    id: row.id,
+    url: row.url,
+    author: row.author_slug || "sin-firma",
+    section: row.section || "Al Minuto",
+    title: row.title,
+    time: timeAgo(row.published_at || row.first_seen_at),
+    hasImage: !!row.image_url,
+    image: row.image_url,
+    likes: row.likes_count || 0,
+    views: row.views_count || 0,
+    liked: likedIds.has(row.id),
+    saved: savedIds.has(row.id),
+  }));
 
   return true;
 }
@@ -540,7 +564,7 @@ async function loadArticlesFromSupabase() {
 (async function init() {
   document.getElementById("feed").innerHTML = '<p class="feed-empty">Cargando noticias…</p>';
   const ok = await loadArticlesFromSupabase();
-  if (!ok) return; // el mensaje de error ya está puesto, no lo tapamos
+  if (!ok) return;
   renderFeed(feedState.currentTab);
   renderTrending();
 })();
